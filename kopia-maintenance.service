@@ -21,9 +21,11 @@ Nice=19
 IOSchedulingClass=idle
 CPUSchedulingPolicy=batch
 
-# Skip cleanly rather than fail when away from the repository. Six days keeps
-# the catch-up run from maintaining twice in the same week.
-ExecCondition=/usr/local/bin/kopia-condition maintenance 144
+# Skip cleanly rather than fail when away from the repository. Five days keeps
+# the catch-up run from maintaining twice in the same week, with enough slack
+# that a run pushed late by RandomizedDelaySec does not make the next weekly
+# trigger fall just short of the interval and skip a whole week.
+ExecCondition=/usr/local/bin/kopia-condition maintenance 120
 
 # Snapshots past the retention policy are already marked for deletion when a
 # snapshot is created. Full maintenance is what actually reclaims their space.

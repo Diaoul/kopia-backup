@@ -95,10 +95,29 @@ The policy also turns on `zstd` compression, which has no restic equivalent
 here: restic compresses by default, kopia does not. Drop that flag if you back
 up mostly incompressible data.
 
-`kopia-policy` applies the rules in two steps, because `--clear-ignore` and
-`--add-ignore` cancel each other out in a single `policy set`. It checks that
-the repository is reachable first and shouts if it fails in between, but if that
-ever happens the fix is simply to run it again.
+`--one-file-system` deserves a look before you trust it. It stops at every
+mount point, and the sources above are exactly the places distributions like to
+mount things under: `/var/log`, `/var/cache` and `/var/lib/*` are separate Btrfs
+subvolumes on a stock Arch or openSUSE layout, and an encrypted or ZFS home is
+its own filesystem. Anything mounted below a source is skipped, silently, with a
+successful exit. Check what you actually have against the source list before
+deciding:
+
+```bash
+findmnt -no TARGET | grep -E '^/(etc|home|root|usr/local|var)/'
+```
+
+Either add those paths as sources in `kopia-backup.service`, or turn the flag
+off in `kopia-policy` and lean on the ignore rules instead.
+
+`kopia-policy` diffs the excludes file against the rules already in the
+repository and applies everything in one `policy set`, which is why it needs
+`jq`. The obvious `--clear-ignore` followed by `--add-ignore` does not work:
+in a single invocation the two cancel out, and split across two invocations a
+failure in between leaves the repository with no ignore rules at all, so the
+next scheduled snapshot quietly swallows every cache directory. Re-running it
+is always safe, it converges and changes nothing when there is nothing to
+change.
 
 The snapshots are tagged `source:systemd`, which is only provenance. It does not
 scope anything, unlike `restic forget --tag systemd`: retention comes from the
@@ -137,8 +156,11 @@ Two more details worth knowing:
   machine would wake on battery only to skip. Backups happen while the laptop
   is awake instead.
 
-`kopia-maintenance.timer` works the same way, weekly, with a six day minimum
-interval.
+`kopia-maintenance.timer` works the same way, weekly, with a five day minimum
+interval. Five rather than six: a run delayed by `RandomizedDelaySec`, or a
+catch-up run landing a day late, would otherwise leave the next weekly trigger
+a few minutes short of six days, skip, and turn a weekly clean up into a
+fortnightly one without saying anything.
 
 ## Maintenance
 There is no `kopia forget`. Snapshots that fall outside the retention policy
@@ -159,9 +181,18 @@ are there for that. A user timer running something like this is enough:
 ```bash
 threshold=72
 stamp=/var/lib/kopia/last-success-backup
-age=$(( ( $(date +%s) - $(stat -c %Y "$stamp") ) / 3600 ))
-(( age > threshold )) && notify-send -u critical "Backup stale" "${age}h since last backup"
+if [[ ! -f $stamp ]]; then
+    notify-send -u critical "Backup never succeeded" "no $stamp"
+else
+    age=$(( ( $(date +%s) - $(stat -c %Y "$stamp") ) / 3600 ))
+    (( age > threshold )) && notify-send -u critical "Backup stale" "${age}h since last backup"
+fi
 ```
+
+The missing file branch is not decoration. Without it `stat` prints nothing,
+the arithmetic fails, and the two states that most deserve an alert, a backup
+that never once succeeded and a wiped state directory, are the two that stay
+silent.
 
 Pick a threshold that absorbs how long you are usually away, otherwise you will
 learn to ignore it.
@@ -198,13 +229,29 @@ the connect, which should be root. Worth checking after the fact:
 sudo ls -l /etc/kopia
 ```
 
-One consequence of backing up `/etc`: the password sidecar goes into the
-repository along with everything else. That does not expose the repository,
-since it is encrypted with that very password and reading the snapshot already
-requires it. It does mean anyone who can read a restored copy of `/etc` learns
-the password, so treat restored trees as sensitive. Add
-`/kopia/repository.config.kopia-password` to the excludes if you would rather
-keep it out, and accept that a restore will then need a manual reconnect.
+One consequence of backing up `/etc`: the whole of `/etc/kopia` goes into the
+repository along with everything else, and that is worth thinking about for a
+moment.
+
+The password sidecar is the mild half. Its presence in the snapshot does not
+expose the repository, because the snapshot is encrypted with that very password
+and reading it already requires knowing it. The backend credentials in
+`repository.config` are the sharp half: they are stored in cleartext, and they
+grant write and delete on the bucket, not just read. Anyone who can read a
+restored copy of `/etc` can therefore destroy the backups, which is a strictly
+worse outcome than reading them.
+
+So treat any restored tree as sensitive, and prefer backend credentials scoped
+to the one bucket, without lifecycle or delete rights if the provider allows it.
+To keep `/etc/kopia` out of the snapshots entirely, add this to the excludes:
+
+```
+/kopia/repository.config*
+```
+
+The trade is that a bare metal restore then starts with `kopia repository
+connect` typed by hand, which is only possible if the credentials survive
+somewhere else. That is a password manager's job, not a backup's.
 
 ## Usage
 Enable and start the timers

@@ -30,7 +30,10 @@ if (( min_interval_hours > 0 )) && [[ -f $stamp ]]; then
     # like "backed up recently".
     mtime=$(stat -c %Y "$stamp" 2>/dev/null) || mtime=0
     age=$(( $(date +%s) - mtime ))
-    if (( age < min_interval_hours * 3600 )); then
+    # A stamp dated in the future, from RTC skew before NTP settles or from a
+    # restore, would otherwise be "too recent" until the clock catches up, and
+    # skips are silent by design: backups would quietly stop for days.
+    if (( age >= 0 && age < min_interval_hours * 3600 )); then
         echo "skip: last success $(( age / 3600 ))h ago, below ${min_interval_hours}h interval"
         exit 1
     fi
