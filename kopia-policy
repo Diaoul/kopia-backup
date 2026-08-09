@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Apply the global kopia policy.
+#
+# Usage: kopia-policy [excludes-file]
+#
+# Unlike restic, kopia takes no exclude or retention arguments per run: both
+# live in policies stored inside the repository. Run this once after connecting,
+# and again whenever the excludes change.
+set -euo pipefail
+
+config=${KOPIA_CONFIG:-/etc/kopia/repository.config}
+log_dir=${KOPIA_LOG_DIR:-/var/log/kopia}
+excludes=${1:-/etc/kopia/excludes}
+
+kopia() { command kopia --config-file "$config" --log-dir "$log_dir" "$@"; }
+
+if [[ ! -r $excludes ]]; then
+    echo "no readable excludes file: $excludes" >&2
+    exit 1
+fi
+
+ignores=()
+while IFS= read -r line; do
+    [[ -z $line || $line == \#* ]] && continue
+    ignores+=(--add-ignore "$line")
+done < "$excludes"
+
+# An empty rule set would clear the ignore rules below and leave nothing in
+# their place, so every cache directory would land in the next snapshot.
+if (( ${#ignores[@]} == 0 )); then
+    echo "no ignore rules in $excludes" >&2
+    exit 1
+fi
+
+# The policy is applied in two steps and there is no transaction around them, so
+# fail before touching anything rather than half way through.
+if ! kopia repository status >/dev/null 2>&1; then
+    echo "repository unreachable, policy left untouched" >&2
+    exit 1
+fi
+
+half_applied() {
+    echo "policy only partially applied, ignore rules may be empty: re-run $0" >&2
+}
+trap half_applied ERR
+
+# Two calls on purpose: --clear-ignore wins over --add-ignore in the same
+# invocation, so the rules would be dropped again right after being added.
+kopia policy set --global --clear-ignore
+
+kopia policy set --global \
+    "${ignores[@]}" \
+    --ignore-cache-dirs=true \
+    --one-file-system=true \
+    --compression=zstd \
+    --keep-latest=3 \
+    --keep-hourly=0 \
+    --keep-daily=7 \
+    --keep-weekly=4 \
+    --keep-monthly=6 \
+    --keep-annual=0
+
+trap - ERR
+
+kopia policy show --global

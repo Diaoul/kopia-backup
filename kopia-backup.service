@@ -1,0 +1,44 @@
+[Unit]
+Description=Kopia backup
+Documentation=https://kopia.io/docs/
+Wants=network-online.target
+After=network-online.target
+
+# Skip cleanly on battery.
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+StateDirectory=kopia
+LogsDirectory=kopia
+
+# Type=oneshot disables the start timeout by default, so a backend that accepts
+# the connection and then stalls would hang the unit until the next reboot and
+# block every later run. Generous enough for a first full backup, raise it if
+# yours legitimately takes longer.
+TimeoutStartSec=12h
+
+# The timer fires often, so runs must stay out of the way.
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+
+# Skip cleanly when the repository is out of reach, and do not back up more
+# than once every 20 hours.
+ExecCondition=/usr/local/bin/kopia-condition backup 20
+
+# Everything kopia needs is in the config file: the storage backend, the cache
+# directory and, through its sidecar, the password. Excludes, retention and
+# one-file-system are not arguments either, they live in the global policy
+# applied by kopia-policy. See the README.
+ExecStart=kopia \
+    --config-file /etc/kopia/repository.config \
+    --log-dir /var/log/kopia \
+    snapshot create \
+    --tags source:systemd \
+    /etc \
+    /home \
+    /root \
+    /usr/local \
+    /var
+ExecStartPost=touch %S/kopia/last-success-backup

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# ExecCondition helper for the kopia units.
+#
+# Usage: kopia-condition <stamp-name> [min-interval-hours]
+#
+# Exit 0     run the unit
+# Exit 1-254 skip the unit cleanly (no failure, no OnFailure, no alert)
+# Exit 255   real failure, the unit is misconfigured
+#
+# Relies on StateDirectory=kopia.
+set -uo pipefail
+
+config=${KOPIA_CONFIG:-/etc/kopia/repository.config}
+log_dir=${KOPIA_LOG_DIR:-/var/log/kopia}
+
+if (( $# < 1 )); then
+    echo "usage: kopia-condition <stamp-name> [min-interval-hours]" >&2
+    exit 255
+fi
+
+stamp_name=$1
+min_interval_hours=${2:-0}
+stamp=${STATE_DIRECTORY:-/var/lib/kopia}/last-success-${stamp_name}
+
+# Already done recently? Guards against catch-up runs from Persistent=true and
+# against the timer backing up more than once a day.
+if (( min_interval_hours > 0 )) && [[ -f $stamp ]]; then
+    # Default to 0 rather than let an unreadable stamp turn into a syntax error
+    # below: that would exit non-zero and skip the unit forever, looking exactly
+    # like "backed up recently".
+    mtime=$(stat -c %Y "$stamp" 2>/dev/null) || mtime=0
+    age=$(( $(date +%s) - mtime ))
+    if (( age < min_interval_hours * 3600 )); then
+        echo "skip: last success $(( age / 3600 ))h ago, below ${min_interval_hours}h interval"
+        exit 1
+    fi
+fi
+
+# Repository reachable? On a laptop the repo is often out of reach. Checking it
+# here turns "away from home" into a skip instead of a failed unit. Opening the
+# repository reads the format blob from the storage backend, so this validates
+# the connection, the credentials and the repository itself, which is a
+# stronger check than pinging the host.
+if ! timeout 90 kopia --config-file "$config" --log-dir "$log_dir" \
+        repository status >/dev/null 2>&1; then
+    echo "skip: repository unreachable"
+    exit 2
+fi
