@@ -1,0 +1,10 @@
+[Unit]
+Description=Warn about stale kopia backups
+
+[Service]
+Type=oneshot
+
+# Each threshold is the unit's own period plus slack for time away from the
+# repository, so ordinary skips stay quiet.
+ExecStart=/usr/local/bin/kopia-staleness backup 72
+ExecStart=/usr/local/bin/kopia-staleness verify 2400

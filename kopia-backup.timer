@@ -2,22 +2,16 @@
 Description=Activate kopia backup
 
 [Timer]
-# Fire several times a day and let the service decide whether conditions are
-# right. A laptop is not reliably in a backup-capable state at a fixed time, so
-# a single scheduled attempt is traded for a few cheap opportunistic ones. The
-# 05:00 slot stays the usual one, the rest cover nights spent on battery or
-# away from the repository.
+# Fire often and let the service decide whether conditions are right.
 OnCalendar=*-*-* 05,11,17,23:00:00
 OnBootSec=10min
 RandomizedDelaySec=10m
 
-# Catch up after the machine was off or asleep at every trigger point. Safe
-# because the service enforces its own minimum interval.
+# Safe because the service enforces its own minimum interval.
 Persistent=true
 
-# Never wake the machine to back up. WakeSystem cannot be made conditional:
-# systemd arms the RTC alarm before ConditionACPower is evaluated, so it would
-# wake on battery only to skip.
+# The RTC alarm is armed before ConditionACPower is evaluated, so waking would
+# happen on battery too, only to skip.
 WakeSystem=false
 
 [Install]

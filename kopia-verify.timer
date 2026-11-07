@@ -1,0 +1,12 @@
+[Unit]
+Description=Activate kopia repository full verification
+
+[Timer]
+OnCalendar=*-01,04,07,10-01 07:00:00
+RandomizedDelaySec=30m
+
+Persistent=true
+WakeSystem=false
+
+[Install]
+WantedBy=timers.target

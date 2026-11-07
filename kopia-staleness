@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Warn when a kopia unit has not succeeded for too long.
+#
+# Usage: kopia-staleness <unit-suffix> <threshold-hours>
+#
+# Runs as the desktop user, since notify-send needs the session bus.
+set -uo pipefail
+
+if (( $# < 2 )); then
+    echo "usage: kopia-staleness <unit-suffix> <threshold-hours>" >&2
+    exit 255
+fi
+
+name=$1
+threshold_hours=$2
+timer=kopia-$name.timer
+timestamp=/var/lib/kopia/last-success-$name
+wants=/etc/systemd/system/timers.target.wants/$timer
+
+warn() {
+    # A failing ExecStart in a Type=oneshot unit would skip the checks queued
+    # behind this one.
+    notify-send -u critical -a kopia "$1" "$2" ||
+        echo "notify-send failed: $1: $2" >&2
+}
+
+if ! systemctl is-enabled --quiet "$timer" 2>/dev/null; then
+    warn "$timer is not enabled" "Nothing is scheduling kopia-$name."
+    exit 0
+fi
+
+if [[ -f $timestamp ]]; then
+    since=$(stat -c %Y "$timestamp" 2>/dev/null)
+    reported=success
+else
+    # Measure from when the timer was enabled, or a fresh install is reported
+    # stale long before it was ever due. The enablement symlink survives a
+    # reboot, unlike ActiveEnterTimestamp which resets on every boot.
+    since=$(stat -c %Y "$wants" 2>/dev/null)
+    [[ -n ${since:-} ]] || since=$(stat -c %Y "/etc/systemd/system/$timer" 2>/dev/null)
+    reported=never
+fi
+
+# Unreadable or vanished mid-check: an alert dated 1970 helps nobody.
+[[ -n ${since:-} ]] || exit 0
+
+age_hours=$(( ( $(date +%s) - since ) / 3600 ))
+(( age_hours > threshold_hours )) || exit 0
+
+if [[ $reported == success ]]; then
+    warn "kopia-$name is stale" \
+        "Last success ${age_hours}h ago, threshold is ${threshold_hours}h."
+else
+    warn "kopia-$name has never succeeded" \
+        "No successful run recorded in the last ${age_hours}h."
+fi

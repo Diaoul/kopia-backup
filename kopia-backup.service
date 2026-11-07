@@ -10,12 +10,14 @@ ConditionACPower=true
 [Service]
 Type=oneshot
 StateDirectory=kopia
+CacheDirectory=kopia
 LogsDirectory=kopia
+LogsDirectoryMode=0700
 
 # Type=oneshot disables the start timeout by default, so a backend that accepts
 # the connection and then stalls would hang the unit until the next reboot and
-# block every later run. Generous enough for a first full backup, raise it if
-# yours legitimately takes longer.
+# block every later run. Generous enough for a first full backup plus the
+# automatic maintenance after it, raise it if yours legitimately takes longer.
 TimeoutStartSec=12h
 
 # The timer fires often, so runs must stay out of the way.
@@ -23,19 +25,26 @@ Nice=19
 IOSchedulingClass=idle
 CPUSchedulingPolicy=batch
 
+# Root, but only able to read: enough to snapshot every file, not to change one.
+ProtectSystem=strict
+ReadWritePaths=/etc/kopia
+PrivateTmp=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
 # Skip cleanly when the repository is out of reach, and do not back up more
 # than once every 20 hours.
 ExecCondition=/usr/local/bin/kopia-condition backup 20
 
-# Everything kopia needs is in the config file: the storage backend, the cache
-# directory and, through its sidecar, the password. Excludes, retention and
-# one-file-system are not arguments either, they live in the global policy
-# applied by kopia-policy. See the README.
+# Excludes and retention live in the repository's global policy, see
+# /etc/kopia/policy.json. Kopia runs maintenance itself as part of this command.
 ExecStart=kopia \
     --config-file /etc/kopia/repository.config \
     --log-dir /var/log/kopia \
     snapshot create \
-    --tags source:systemd \
     /etc \
     /home \
     /root \

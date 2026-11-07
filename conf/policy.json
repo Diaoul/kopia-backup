@@ -1,0 +1,67 @@
+{
+  "(global)": {
+    "retention": {
+      "keepLatest": 3,
+      "keepHourly": 0,
+      "keepDaily": 7,
+      "keepWeekly": 4,
+      "keepMonthly": 6,
+      "keepAnnual": 0
+    },
+    "files": {
+      "ignore": [
+        "/cache",
+        "/lock",
+        "/log",
+        "/opt",
+        "/run",
+        "/spool",
+        "/tmp",
+        ".cache",
+        "/.local/share/Trash",
+        "*/.local/share/Trash",
+        ".direnv",
+        ".pio",
+        ".tox",
+        "/*/.cargo/registry",
+        "/*/.gradle",
+        "/*/.npm",
+        "/*/go/pkg",
+        "node_modules",
+        ".venv",
+        ".venv-*",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".terraform",
+        ".esphome",
+        "*.pkg.tar.zst",
+        "/*/.local/share/mise",
+        "/*/.local/share/pnpm",
+        "/*/.local/share/uv",
+        "/*/.nvm",
+        "GPUCache",
+        "ShaderCache",
+        "GrShaderCache",
+        "GraphiteDawnCache",
+        "DawnWebGPUCache",
+        "DawnGraphiteCache",
+        "Code Cache",
+        "Crashpad",
+        "*.pma",
+        "/*/.config/*/Cache",
+        "/*/.config/*/Dictionaries",
+        "/*/.local/share/gvfs-metadata"
+      ],
+      "ignoreDotFiles": [
+        ".kopiaignore"
+      ],
+      "ignoreCacheDirs": true,
+      "oneFileSystem": true
+    },
+    "compression": {
+      "compressorName": "zstd"
+    }
+  }
+}

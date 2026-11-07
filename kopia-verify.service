@@ -1,0 +1,42 @@
+[Unit]
+Description=Kopia repository full verification
+Documentation=https://kopia.io/docs/
+Wants=network-online.target
+After=network-online.target
+
+# Downloads the whole repository, so skip cleanly on battery.
+ConditionACPower=true
+
+[Service]
+Type=oneshot
+StateDirectory=kopia
+CacheDirectory=kopia
+LogsDirectory=kopia
+LogsDirectoryMode=0700
+
+# A guard against a stalled backend, not an estimate: raise it if downloading
+# the whole repository legitimately takes longer.
+TimeoutStartSec=24h
+
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+
+ProtectSystem=strict
+ReadWritePaths=/etc/kopia
+PrivateTmp=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+# Sixty days leaves room for a catch-up run without verifying twice in the
+# same quarter.
+ExecCondition=/usr/local/bin/kopia-condition verify 1440
+
+ExecStart=kopia \
+    --config-file /etc/kopia/repository.config \
+    --log-dir /var/log/kopia \
+    snapshot verify --verify-files-percent=100
+ExecStartPost=touch %S/kopia/last-success-verify
