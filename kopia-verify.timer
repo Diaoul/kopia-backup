@@ -2,7 +2,9 @@
 Description=Activate kopia repository full verification
 
 [Timer]
-OnCalendar=*-01,04,07,10-01 07:00:00
+# Daily on purpose: the service enforces the interval, so a day spent on
+# battery or away from the repository only delays the run.
+OnCalendar=*-*-* 07:00:00
 RandomizedDelaySec=30m
 
 Persistent=true

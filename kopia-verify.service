@@ -31,9 +31,7 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 
-# Sixty days leaves room for a catch-up run without verifying twice in the
-# same quarter.
-ExecCondition=/usr/local/bin/kopia-condition verify 1440
+ExecCondition=/usr/local/bin/kopia-condition verify 2160
 
 ExecStart=kopia \
     --config-file /etc/kopia/repository.config \

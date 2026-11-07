@@ -126,9 +126,10 @@ What it sets:
   Hourly and annual are set to 0, because kopia's defaults keep both.
 * **Excludes:** gitignore syntax, matched against each snapshot source root
   rather than the filesystem root. A pattern with a slash is anchored to the
-  source, so `/cache` is `/var/cache` for the `/var` source and `/*/.npm` is
-  `~/.npm` for every user under `/home`. A pattern without one, such as
-  `.cache`, matches at any depth. `.kopiaignore` files in the tree are honored
+  source, so `/cache` is `/var/cache` for the `/var` source. A pattern without
+  one, such as `.npm`, matches at any depth, and so does one starting with
+  `**/`, such as `**/go/pkg`: both cover `/root` as well as every user under
+  `/home`. `.kopiaignore` files in the tree are honored
   as well, and directories with a `CACHEDIR.TAG` are skipped.
 * **Compression:** `zstd`. Kopia does not compress by default. There is no best
   algorithm for every data set, and `kopia benchmark compression
@@ -183,8 +184,8 @@ Two more details worth knowing:
   machine would wake on battery only to skip. Backups happen while the laptop
   is awake instead.
 
-`kopia-verify.timer` works the same way, on the first day of each quarter, with
-a sixty day minimum interval.
+`kopia-verify.timer` works the same way: it fires daily, and the service runs
+at most once every 90 days.
 
 ## Maintenance
 There is no maintenance unit, because kopia maintains the repository itself:
@@ -236,7 +237,7 @@ runs that did not.
 
 ## Verification
 `kopia-verify.service` runs `kopia snapshot verify --verify-files-percent=100`
-once a quarter. Without that flag, verification only checks that every object
+every 90 days. Without that flag, verification only checks that every object
 referenced by the snapshots exists and that the metadata is consistent. With
 it, every file is downloaded and hashed, so a blob that is present but corrupted
 is caught too.
@@ -268,6 +269,12 @@ the filesystem is read-only apart from `/etc/kopia` and kopia's state, cache and
 log directories, and the backup keeps only `CAP_DAC_READ_SEARCH`, which lets it
 read any file and change none. Verification keeps no capabilities at all. The
 log directory is mode 700, since kopia logs name every file it touches.
+
+A repository or cache kept anywhere else, a filesystem repository on a mounted
+disk for example, has to be added to `ReadWritePaths=` in each service, or
+every run fails on a read-only file system. Actions run inside the same
+sandbox, so a dump script that writes files or switches user needs the
+matching lines relaxed too.
 
 This set is tested on Arch with an S3 backend (Garage), not on every
 distribution and layout. If a run fails with a permission or read-only error,

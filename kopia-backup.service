@@ -39,8 +39,6 @@ RestrictSUIDSGID=yes
 # than once every 20 hours.
 ExecCondition=/usr/local/bin/kopia-condition backup 20
 
-# Excludes and retention live in the repository's global policy, see
-# /etc/kopia/policy.json. Kopia runs maintenance itself as part of this command.
 ExecStart=kopia \
     --config-file /etc/kopia/repository.config \
     --log-dir /var/log/kopia \
